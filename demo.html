@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>hijri-calendar demo</title>
+  <!-- ONE script tag is all a host page needs -->
+  <script src="hijri-calendar.js"></script>
+  <style>
+    body { font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 2rem; color: #222; background: #fafafa; }
+    h1 { margin: 0 0 .25rem; }
+    h2 { margin: 2.5rem 0 .75rem; font-size: 1.1rem; }
+    p.lead { color: #666; margin-top: 0; }
+    section { max-width: 920px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+    label { display: block; font-size: .85rem; color: #555; margin-bottom: .25rem; }
+    input[type=text] { font: inherit; padding: .5rem .6rem; border: 1px solid #ccc; border-radius: 6px; width: 100%; box-sizing: border-box; }
+    pre { background: #1e1e1e; color: #ddd; padding: .75rem 1rem; border-radius: 6px; overflow: auto; font-size: .8rem; }
+    #log { max-height: 10rem; overflow: auto; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: .5rem .75rem; font-family: ui-monospace, Consolas, monospace; font-size: .78rem; }
+    /* theming is just CSS custom properties on the element */
+    hijri-calendar.themed { --hc-accent: #0b7a4b; --hc-accent-fg: #fff; --hc-today-bg: #ffe9a8; --hc-today-fg: #5a3e00; --hc-border: #cfe6da; --hc-radius: 12px; --hc-font-size: 14px; }
+  </style>
+</head>
+<body>
+<section>
+  <h1>&lt;hijri-calendar&gt;</h1>
+  <p class="lead">A dependency-free Web Component. Drop in one <code>&lt;script&gt;</code>, add the tag, point it at an input.</p>
+
+  <h2>1. Popup date picker bound to an input</h2>
+  <div class="row">
+    <div>
+      <label for="dob">Date of birth (Gregorian ISO written to this input)</label>
+      <input id="dob" type="text" placeholder="Click to pick a date…">
+      <label for="dob-hijri" style="margin-top:.75rem">Hijri mirror (filled by <code>target-hijri</code>)</label>
+      <input id="dob-hijri" type="text" readonly placeholder="…">
+      <hijri-calendar id="picker" target="#dob" target-hijri="#dob-hijri" popup format="iso" hijri-format="hijri" miqaats-url="miqaats.json"></hijri-calendar>
+    </div>
+    <pre>&lt;input id="dob" type="text"&gt;
+&lt;input id="dob-hijri" type="text" readonly&gt;
+
+&lt;hijri-calendar
+  target="#dob"
+  target-hijri="#dob-hijri"
+  popup
+  format="iso"
+  hijri-format="hijri"
+  miqaats-url="miqaats.json"&gt;
+&lt;/hijri-calendar&gt;</pre>
+  </div>
+
+  <h2>2. Inline calendar with miqaat badges, custom output format, Monday weeks</h2>
+  <p class="lead">Wide enough, each miqaat shows as a pill with its icon and a truncated title. Narrow grids and popups fall back to compact icon markers.</p>
+  <label for="appt">Appointment (custom output format)</label>
+  <input id="appt" type="text" placeholder="Pick a day below">
+  <hijri-calendar id="inline" class="themed" target="#appt" format="hD hMMM hYYYYH [=] D MMM YYYY" week-start="monday" numerals="latin" max-badges="2" miqaats-url="miqaats.json" style="margin-top:.75rem;width:100%"></hijri-calendar>
+  <div class="row" style="margin-top:1rem">
+    <div>
+      <pre>&lt;hijri-calendar
+  target="#appt"
+  format="hD hMMM hYYYYH [=] D MMM YYYY"
+  week-start="monday"
+  numerals="latin"
+  max-badges="2"
+  miqaats-url="miqaats.json"&gt;
+&lt;/hijri-calendar&gt;
+
+&lt;style&gt;
+  hijri-calendar.themed {
+    --hc-accent: #0b7a4b;
+    --hc-today-bg: #ffe9a8;
+    --hc-radius: 12px;
+  }
+&lt;/style&gt;</pre>
+      <label>Events (<code>hijri-change</code>, <code>hijri-navigate</code>, …)</label>
+      <div id="log"></div>
+    </div>
+  </div>
+
+  <h2>3. Zero-markup: auto-create from the script tag</h2>
+  <div class="row">
+    <div>
+      <label for="auto">Pick-up date</label>
+      <input id="auto" type="text" placeholder="Focus me">
+      <script src="hijri-calendar.js" data-target="#auto" data-popup data-format="hijri"></script>
+    </div>
+    <pre>&lt;input id="auto" type="text"&gt;
+&lt;script src="hijri-calendar.js"
+        data-target="#auto"
+        data-popup
+        data-format="hijri"&gt;&lt;/script&gt;</pre>
+  </div>
+</section>
+
+<script>
+  var log = document.getElementById("log");
+  function line(msg) {
+    var d = document.createElement("div");
+    d.textContent = new Date().toLocaleTimeString() + "  " + msg;
+    log.prepend(d);
+  }
+  document.addEventListener("hijri-change", function (e) {
+    var el = e.target, det = e.detail;
+    line("#" + el.id + " hijri-change → " + (det ? det.hijriText + " = " + det.iso : "cleared"));
+  });
+  document.addEventListener("hijri-navigate", function (e) {
+    line("#" + e.target.id + " hijri-navigate → " + e.detail.monthName + " " + e.detail.year + "H");
+  });
+  document.getElementById("dob").addEventListener("change", function () {
+    line("input#dob change event, value=" + JSON.stringify(this.value) + " data-hijri=" + this.dataset.hijri);
+  });
+</script>
+</body>
+</html>
