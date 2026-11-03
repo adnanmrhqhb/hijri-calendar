@@ -1,6 +1,8 @@
 /*!
- * <hijri-calendar> — standalone Gregorian/Hijri calendar & date picker
- * Supports base="gregorian" / base="hijri", year dropdown, and miqaats.
+ * <hijri-calendar> — standalone Hijri (Misri / Dawoodi Bohra) calendar & date picker
+ * Vanilla JavaScript Web Component. Zero dependencies. Shadow DOM for style isolation.
+ *
+ * Calendar arithmetic ported from mumineen_calendar_js by Murtaza Gulamali (MIT).
  */
 (function (window, document) {
   "use strict";
@@ -37,6 +39,7 @@
 
   var WEEKDAYS_SUN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   var WEEKDAYS_MON = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
   var ARABIC_DIGITS = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
 
   var FORMAT_PRESETS = {
@@ -47,25 +50,35 @@
     "both":       "hD hMMMM hYYYYH (D MMMM YYYY)"
   };
 
+  /* --- HijriDate Class --- */
   function HijriDate(year, month, day) {
     this.year = year;
     this.month = month;
     this.day = day;
   }
+
   HijriDate.prototype.getYear = function () { return this.year; };
   HijriDate.prototype.getMonth = function () { return this.month; };
   HijriDate.prototype.getDate = function () { return this.day; };
 
+  HijriDate.getMonthName = function (month) { return HIJRI_MONTHS_LONG[month]; };
+  HijriDate.getShortMonthName = function (month) { return HIJRI_MONTHS_SHORT[month]; };
+
   HijriDate.isJulian = function (date) {
     var y = date.getFullYear(), m = date.getMonth(), d = date.getDate();
     if (y < 1582) return true;
-    if (y === 1582) { if (m < 9) return true; if (m === 9 && d < 5) return true; }
+    if (y === 1582) {
+      if (m < 9) return true;
+      if (m === 9 && d < 5) return true;
+    }
     return false;
   };
 
   HijriDate.gregorianToAJD = function (date) {
-    var a, b, year = date.getFullYear(), month = date.getMonth() + 1,
-        day = date.getDate() + date.getHours() / 24 + date.getMinutes() / 1440 + date.getSeconds() / 86400;
+    var a, b,
+        year = date.getFullYear(),
+        month = date.getMonth() + 1,
+        day = date.getDate() + date.getHours() / 24 + date.getMinutes() / 1440 + date.getSeconds() / 86400 + date.getMilliseconds() / 86400000;
     if (month < 3) { year--; month += 12; }
     if (HijriDate.isJulian(date)) { b = 0; } else { a = Math.floor(year / 100); b = 2 - a + Math.floor(a / 4); }
     return Math.floor(365.25 * (year + 4716)) + Math.floor(30.6001 * (month + 1)) + day + b - 1524.5;
@@ -75,9 +88,13 @@
     var a, b, c, d, e, z, alpha, year, month, day;
     z = Math.floor(ajd + 0.5);
     if (z < 2299161) { a = z; } else { alpha = Math.floor((z - 1867216.25) / 36524.25); a = z + 1 + alpha - Math.floor(0.25 * alpha); }
-    b = a + 1524; c = Math.floor((b - 122.1) / 365.25); d = Math.floor(365.25 * c);
-    e = Math.floor((b - d) / 30.6001); day = b - d - Math.floor(30.6001 * e);
-    month = (e < 14) ? (e - 2) : (e - 14); year = (month < 2) ? (c - 4715) : (c - 4716);
+    b = a + 1524;
+    c = Math.floor((b - 122.1) / 365.25);
+    d = Math.floor(365.25 * c);
+    e = Math.floor((b - d) / 30.6001);
+    day = b - d - Math.floor(30.6001 * e);
+    month = (e < 14) ? (e - 2) : (e - 14);
+    year = (month < 2) ? (c - 4715) : (c - 4716);
     var out = new Date(year, month, day, 0, 0, 0, 0);
     out.setFullYear(year);
     return out;
@@ -85,7 +102,10 @@
 
   HijriDate.isKabisa = function (year) { return KABISA_YEAR_REMAINDERS.indexOf(year % 30) !== -1; };
   HijriDate.daysInMonth = function (year, month) { return ((month === 11 && HijriDate.isKabisa(year)) || (month % 2 === 0)) ? 30 : 29; };
-  HijriDate.prototype.dayOfYear = function () { return (this.month === 0) ? this.day : (DAYS_IN_YEAR[this.month - 1] + this.day); };
+
+  HijriDate.prototype.dayOfYear = function () {
+    return (this.month === 0) ? this.day : (DAYS_IN_YEAR[this.month - 1] + this.day);
+  };
 
   HijriDate.fromAJD = function (ajd) {
     var year, month, date, i = 0, left = Math.floor(ajd - 1948083.5), y30 = Math.floor(left / 10631.0);
@@ -109,100 +129,59 @@
 
   HijriDate.fromGregorian = function (date) { return HijriDate.fromAJD(HijriDate.gregorianToAJD(date)); };
   HijriDate.prototype.toGregorian = function () { return HijriDate.ajdToGregorian(this.toAJD()); };
+  HijriDate.prototype.toString = function () { return this.day + " " + HIJRI_MONTHS_LONG[this.month] + " " + this.year + "H"; };
 
-  function GregorianCalendar(year, month, iso8601) {
-    this.year = year;
-    this.month = month;
-    this.iso8601 = !!iso8601;
-  }
-  GregorianCalendar.prototype.getYear = function () { return this.year; };
-  GregorianCalendar.prototype.getMonth = function () { return this.month; };
-
-  GregorianCalendar.prototype.days = function () {
-    var out = [], daysCount = new Date(this.year, this.month + 1, 0).getDate();
-    for (var d = 1; d <= daysCount; d++) {
-      out.push(dayHash(HijriDate.fromGregorian(new Date(this.year, this.month, d)), false));
-    }
-    return out;
-  };
-
-  GregorianCalendar.prototype.previousDays = function () {
-    var out = [], firstDt = new Date(this.year, this.month, 1), wDay = firstDt.getDay();
-    if (this.iso8601) wDay = (wDay === 0) ? 6 : wDay - 1;
-    var prevMonthLast = new Date(this.year, this.month, 0), daysInPrev = prevMonthLast.getDate();
-    for (var i = 0; i < wDay; i++) {
-      out.push(dayHash(HijriDate.fromGregorian(new Date(this.year, this.month - 1, daysInPrev - wDay + i + 1)), true));
-    }
-    return out;
-  };
-
-  GregorianCalendar.prototype.nextDays = function () {
-    var out = [], lastDt = new Date(this.year, this.month + 1, 0), wDay = lastDt.getDay();
-    var trail = this.iso8601 ? (wDay === 0 ? 0 : 6 - wDay) : (6 - wDay);
-    for (var i = 0; i < trail; i++) {
-      out.push(dayHash(HijriDate.fromGregorian(new Date(this.year, this.month + 1, i + 1)), true));
-    }
-    return out;
-  };
-
-  GregorianCalendar.prototype.weeks = function () {
-    var all = this.previousDays().concat(this.days(), this.nextDays()), weeks = [];
-    for (var i = 0; i < all.length; i += 7) weeks.push(all.slice(i, i + 7));
-    return weeks;
-  };
-
-  GregorianCalendar.prototype.previousMonth = function () {
-    var m = this.month - 1, y = this.year;
-    if (m < 0) { m = 11; y--; }
-    return new GregorianCalendar(y, m, this.iso8601);
-  };
-
-  GregorianCalendar.prototype.nextMonth = function () {
-    var m = this.month + 1, y = this.year;
-    if (m > 11) { m = 0; y++; }
-    return new GregorianCalendar(y, m, this.iso8601);
-  };
-
+  /* --- HijriCalendar (Month view) --- */
   function HijriCalendar(year, month, iso8601) {
     this.year = year;
     this.month = month;
     this.iso8601 = !!iso8601;
   }
-  HijriCalendar.prototype.getYear = function () { return this.year; };
-  HijriCalendar.prototype.getMonth = function () { return this.month; };
+
   HijriCalendar.prototype.dayOfWeek = function (date) {
-    var hd = new HijriDate(this.year, this.month, date), offset = this.iso8601 ? 0.5 : 1.5;
-    return (hd.toAJD() + offset) % 7;
+    var hijriDate = new HijriDate(this.year, this.month, date), offset = this.iso8601 ? 0.5 : 1.5;
+    return (hijriDate.toAJD() + offset) % 7;
   };
+
   HijriCalendar.prototype.days = function () {
     var out = [], n = HijriDate.daysInMonth(this.year, this.month);
     for (var d = 1; d <= n; d++) out.push(dayHash(new HijriDate(this.year, this.month, d), false));
     return out;
   };
+
   HijriCalendar.prototype.previousDays = function () {
     var out = [], prev = this.previousMonth(), daysInPrev = HijriDate.daysInMonth(prev.getYear(), prev.getMonth()), lead = this.dayOfWeek(1);
-    for (var i = 0; i < lead; i++) out.push(dayHash(new HijriDate(prev.getYear(), prev.getMonth(), daysInPrev - lead + i + 1), true));
+    for (var i = 0; i < lead; i++) {
+      out.push(dayHash(new HijriDate(prev.getYear(), prev.getMonth(), daysInPrev - lead + i + 1), true));
+    }
     return out;
   };
+
   HijriCalendar.prototype.nextDays = function () {
     var out = [], next = this.nextMonth(), daysInMonth = HijriDate.daysInMonth(this.year, this.month), trail = 6 - this.dayOfWeek(daysInMonth);
-    for (var i = 0; i < trail; i++) out.push(dayHash(new HijriDate(next.getYear(), next.getMonth(), i + 1), true));
+    for (var i = 0; i < trail; i++) {
+      out.push(dayHash(new HijriDate(next.getYear(), next.getMonth(), i + 1), true));
+    }
     return out;
   };
+
   HijriCalendar.prototype.weeks = function () {
     var all = this.previousDays().concat(this.days(), this.nextDays()), weeks = [];
     for (var i = 0; i < all.length; i += 7) weeks.push(all.slice(i, i + 7));
     return weeks;
   };
+
   HijriCalendar.prototype.previousMonth = function () {
-    var y = (this.month === 0 && this.year > MIN_YEAR) ? (this.year - 1) : this.year, m = (this.month === 0) ? 11 : (this.month - 1);
-    return new HijriCalendar(y, m, this.iso8601);
-  };
-  HijriCalendar.prototype.nextMonth = function () {
-    var y = (this.month === 11 && this.year < MAX_YEAR) ? (this.year + 1) : this.year, m = (this.month === 11) ? 0 : (this.month + 1);
-    return new HijriCalendar(y, m, this.iso8601);
+    var year = (this.month === 0 && this.year > MIN_YEAR) ? (this.year - 1) : this.year, month = (this.month === 0) ? 11 : (this.month - 1);
+    return new HijriCalendar(year, month, this.iso8601);
   };
 
+  HijriCalendar.prototype.nextMonth = function () {
+    var year = (this.month === 11 && this.year < MAX_YEAR) ? (this.year + 1) : this.year, month = (this.month === 11) ? 0 : (this.month + 1);
+    return new HijriCalendar(year, month, this.iso8601);
+  };
+
+  /* --- Helpers --- */
   function dayHash(hijriDate, isFiller) {
     var g = hijriDate.toGregorian();
     return {
@@ -214,16 +193,22 @@
   }
 
   function pad2(n) { return (n < 10 ? "0" : "") + n; }
+
   function toArabicNumerals(x) {
     var s = String(Math.floor(x)), out = "";
-    for (var i = 0; i < s.length; i++) { var d = parseInt(s.charAt(i), 10); out += isNaN(d) ? s.charAt(i) : ARABIC_DIGITS[d]; }
+    for (var i = 0; i < s.length; i++) {
+      var d = parseInt(s.charAt(i), 10);
+      out += isNaN(d) ? s.charAt(i) : ARABIC_DIGITS[d];
+    }
     return out;
   }
+
   function escapeHtml(s) {
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
   var TOKEN_RE = /\[([^\]]*)\]|hMMMM|hMMM|hYYYY|hMM|hM|hDD|hD|MMMM|MMM|YYYY|MM|M|DD|D/g;
+
   function formatDay(day, template) {
     var h = day.hijri, g = day.gregorian;
     template = FORMAT_PRESETS[template] || template || FORMAT_PRESETS.iso;
@@ -262,25 +247,33 @@
   function parseValue(input, preferHijri) {
     if (input == null || input === "") return null;
     if (input instanceof Date) return isNaN(input.getTime()) ? null : dayHash(HijriDate.fromGregorian(input), false);
-    if (typeof input === "object" && typeof input.year === "number") return validHijri(input.year, input.month, input.date);
+    if (typeof input === "object" && typeof input.year === "number") {
+      return validHijri(input.year, input.month, input.date);
+    }
     var str = String(input).trim(), m;
     m = /^(\d{4})-(\d{1,2})-(\d{1,2})\s*(H)?$/i.exec(str);
     if (m) {
       var y = +m[1], mo = +m[2] - 1, d = +m[3];
       if (m[4] || preferHijri) return validHijri(y, mo, d);
-      var dt = new Date(y, mo, d); dt.setFullYear(y);
+      var dt = new Date(y, mo, d);
+      dt.setFullYear(y);
       if (dt.getMonth() !== mo || dt.getDate() !== d) return null;
       return dayHash(HijriDate.fromGregorian(dt), false);
     }
     m = /^(\d{1,2})\s+([A-Za-z][A-Za-z\s\-']*?)\s+(\d{4})\s*H$/i.exec(str);
-    if (m) { var hm = findHijriMonth(m[2]); return hm < 0 ? null : validHijri(+m[3], hm, +m[1]); }
+    if (m) {
+      var hm = findHijriMonth(m[2]);
+      return hm < 0 ? null : validHijri(+m[3], hm, +m[1]);
+    }
     var t = Date.parse(str);
     if (!isNaN(t)) return dayHash(HijriDate.fromGregorian(new Date(t)), false);
     return null;
   }
 
   function validHijri(y, m, d) {
-    if (!(y >= MIN_YEAR && y <= MAX_YEAR) || !(m >= 0 && m <= 11) || !(d >= 1 && d <= HijriDate.daysInMonth(y, m))) return null;
+    if (!(y >= MIN_YEAR && y <= MAX_YEAR)) return null;
+    if (!(m >= 0 && m <= 11)) return null;
+    if (!(d >= 1 && d <= HijriDate.daysInMonth(y, m))) return null;
     return dayHash(new HijriDate(y, m, d), false);
   }
 
@@ -332,13 +325,14 @@
   function setNativeValue(el, value) {
     var proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
         desc = Object.getOwnPropertyDescriptor(proto, "value");
-    if (desc && desc.set) desc.set.call(el, value); else el.value = value;
+    if (desc && desc.set) { desc.set.call(el, value); } else { el.value = value; }
   }
 
   function fire(el, type, detail) {
     el.dispatchEvent(new CustomEvent(type, { bubbles: true, composed: true, cancelable: false, detail: detail }));
   }
 
+  /* --- Styles & Template --- */
   var STYLE = [
     ":host{",
     "  --hc-font:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;",
@@ -355,18 +349,21 @@
     "*,*::before,*::after{box-sizing:inherit}",
     ".frame{padding:.75em}",
     ".year-row{display:flex;align-items:center;justify-content:space-between;gap:.5em}",
-    "select.year-select{font:inherit;font-weight:600;font-size:1.1em;padding:.2em .5em;border:1px solid var(--hc-border);border-radius:var(--hc-radius);background:var(--hc-bg);color:var(--hc-fg);cursor:pointer;outline:none}",
-    "select.year-select:focus{border-color:var(--hc-accent)}",
+    ".year-controls{display:flex;align-items:center;gap:.15em}",
+    "h2,h3,h4{margin:0;font-weight:600;line-height:1.2}",
+    "h2{font-size:1.25em;min-width:4.2em;text-align:center}",
     "button{font:inherit;color:var(--hc-accent);background:none;border:0;border-radius:var(--hc-radius);cursor:pointer;padding:.2em .45em;line-height:1}",
     "button:hover{background:var(--hc-hover-bg)}",
     "button:focus-visible{outline:2px solid var(--hc-accent);outline-offset:1px}",
+    "button[disabled]{opacity:.3;cursor:default;background:none}",
     "button.nav{font-size:1.4em;width:1.5em;height:1.5em;display:inline-flex;align-items:center;justify-content:center;padding:0}",
     "button.today{border:1px solid var(--hc-border);padding:.4em .8em;font-size:.85em;color:var(--hc-fg)}",
     ".month-row{display:flex;align-items:center;justify-content:space-between;margin:.4em 0 .6em}",
     ".month-title{flex:1;text-align:center}",
-    "h3{font-size:1.1em;margin:0}",
+    "h3{font-size:1.1em}",
     ".greg-range{font-size:.75em;color:var(--hc-muted)}",
     "table{width:100%;border-collapse:collapse;table-layout:fixed}",
+    "table:focus-visible{outline:2px solid var(--hc-accent);outline-offset:2px}",
     "th{font-size:.72em;font-weight:600;color:var(--hc-muted);text-transform:uppercase;letter-spacing:.04em;padding:.35em 0;text-align:center}",
     "td{position:relative;height:var(--hc-cell-height);border:1px solid var(--hc-border);padding:2px;vertical-align:top;overflow:hidden}",
     "td.day{cursor:pointer}",
@@ -399,7 +396,11 @@
     "<style>" + STYLE + "</style>" +
     '<div class="frame" part="frame">' +
     '  <div class="year-row" part="header">' +
-    '    <select class="year-select" part="year" aria-label="Select year"></select>' +
+    '    <div class="year-controls">' +
+    '      <button type="button" class="nav" part="button nav" data-action="prev-year" aria-label="Previous year">−</button>' +
+    '      <h2 class="year" part="year" aria-live="polite"></h2>' +
+    '      <button type="button" class="nav" part="button nav" data-action="next-year" aria-label="Next year">+</button>' +
+    '    </div>' +
     '    <button type="button" class="today" part="button today" data-action="today">Today</button>' +
     '  </div>' +
     '  <div class="month-row" part="month-row">' +
@@ -411,6 +412,7 @@
     '  <div class="miqaats" part="miqaats" hidden></div>' +
     '</div>';
 
+  /* --- Web Component Definition --- */
   var HijriCalendarElement = /** @class */ (function (_super) {
     function HijriCalendarElement() {
       var self = Reflect.construct(_super, [], new.target || HijriCalendarElement);
@@ -419,11 +421,7 @@
 
       self._root = root;
       self._today = dayHash(HijriDate.fromGregorian(new Date()), false);
-      
-      self._isGregorianBase = true;
-      var now = new Date();
-      self._view = new GregorianCalendar(now.getFullYear(), now.getMonth(), false);
-      
+      self._view = new HijriCalendar(self._today.hijri.year, self._today.hijri.month, false);
       self._selected = null;
       self._miqaats = [];
       self._target = null;
@@ -431,7 +429,7 @@
       self._connected = false;
 
       self._els = {
-        yearSelect: root.querySelector(".year-select"),
+        year: root.querySelector(".year"),
         month: root.querySelector(".month"),
         range: root.querySelector(".greg-range"),
         table: root.querySelector("table"),
@@ -441,7 +439,6 @@
       };
 
       self._onRootClick = self._onRootClick.bind(self);
-      self._onYearChange = self._onYearChange.bind(self);
       self._onGridKeydown = self._onGridKeydown.bind(self);
       self._onTargetFocus = self._onTargetFocus.bind(self);
       self._onTargetChange = self._onTargetChange.bind(self);
@@ -456,7 +453,7 @@
 
     Object.defineProperty(HijriCalendarElement, "observedAttributes", {
       get: function () {
-        return ["target", "target-hijri", "value", "week-start", "numerals", "min", "max", "miqaats-url", "popup", "format", "hijri-format", "max-badges", "hide-miqaats", "theme", "base"];
+        return ["target", "target-hijri", "value", "week-start", "numerals", "min", "max", "miqaats-url", "popup", "format", "hijri-format", "max-badges", "hide-miqaats", "theme"];
       }
     });
 
@@ -464,10 +461,7 @@
 
     P.connectedCallback = function () {
       this._connected = true;
-      this._updateBaseMode();
-      this._populateYearDropdown();
       this._root.addEventListener("click", this._onRootClick);
-      this._els.yearSelect.addEventListener("change", this._onYearChange);
       this._els.table.addEventListener("keydown", this._onGridKeydown);
       this._bindTargets();
 
@@ -488,7 +482,6 @@
     P.disconnectedCallback = function () {
       this._connected = false;
       this._root.removeEventListener("click", this._onRootClick);
-      this._els.yearSelect.removeEventListener("change", this._onYearChange);
       this._els.table.removeEventListener("keydown", this._onGridKeydown);
       this._unbindTargets();
       this._teardownPopupListeners();
@@ -496,49 +489,26 @@
 
     P.attributeChangedCallback = function (name, oldVal, newVal) {
       if (!this._connected || oldVal === newVal) return;
-      if (name === "base") {
-        this._updateBaseMode();
-        this._populateYearDropdown();
-      } else if (name === "target" || name === "target-hijri") {
-        this._bindTargets();
-      } else if (name === "value") {
-        this._select(parseValue(newVal, true), { write: true, emit: false });
-      } else if (name === "miqaats-url") {
-        if (newVal) this._loadMiqaats(newVal); else this.miqaats = [];
-      } else if (name === "popup" && newVal === null) {
-        this.close();
-      } else {
-        this._render();
+      switch (name) {
+        case "target":
+        case "target-hijri":
+          this._bindTargets();
+          break;
+        case "value":
+          this._select(parseValue(newVal, true), { write: true, emit: false });
+          break;
+        case "miqaats-url":
+          if (newVal) this._loadMiqaats(newVal); else this.miqaats = [];
+          break;
+        case "popup":
+          if (newVal === null) this.close();
+          break;
+        default:
+          this._render();
       }
     };
 
-    P._updateBaseMode = function () {
-      var baseAttr = this.getAttribute("base") || "gregorian";
-      this._isGregorianBase = (baseAttr !== "hijri");
-      var now = new Date();
-      if (this._isGregorianBase) {
-        this._view = new GregorianCalendar(now.getFullYear(), now.getMonth(), this.getAttribute("week-start") === "monday");
-      } else {
-        var hd = HijriDate.fromGregorian(now);
-        this._view = new HijriCalendar(hd.getYear(), hd.getMonth(), this.getAttribute("week-start") === "monday");
-      }
-    };
-
-    P._populateYearDropdown = function () {
-      var html = "";
-      var currentYear = this._view.getYear();
-      var arabic = this.getAttribute("numerals") !== "latin";
-      
-      var startY = this._isGregorianBase ? 2000 : 1400;
-      var endY = this._isGregorianBase ? 2050 : 1500;
-
-      for (var y = startY; y <= endY; y++) {
-        var label = (this._isGregorianBase || !arabic) ? (y + (this._isGregorianBase ? "" : "H")) : (toArabicNumerals(y) + "H");
-        html += '<option value="' + y + '"' + (y === currentYear ? ' selected' : '') + '>' + label + '</option>';
-      }
-      this._els.yearSelect.innerHTML = html;
-    };
-
+    /* --- Public Properties & Methods --- */
     Object.defineProperties(P, {
       value: {
         get: function () {
@@ -557,10 +527,15 @@
         },
         set: function (v) { this._select(v ? validHijri(v.year, v.month, v.date) : null, { write: true, emit: false }); }
       },
-      selected: { get: function () { return this._selected ? this._detail(this._selected) : null; } },
+      selected: {
+        get: function () { return this._selected ? this._detail(this._selected) : null; }
+      },
       miqaats: {
         get: function () { return this._miqaats; },
-        set: function (list) { this._miqaats = Array.isArray(list) ? list : []; if (this._connected) this._render(); }
+        set: function (list) {
+          this._miqaats = Array.isArray(list) ? list : [];
+          if (this._connected) this._render();
+        }
       },
       isOpen: { get: function () { return this.hasAttribute("open"); } }
     });
@@ -580,57 +555,42 @@
     };
 
     P.toggle = function () { this.isOpen ? this.close() : this.open(); };
-    
     P.goToToday = function () {
-      var now = new Date();
-      this._today = dayHash(HijriDate.fromGregorian(now), false);
-      if (this._isGregorianBase) {
-        this._view = new GregorianCalendar(now.getFullYear(), now.getMonth(), this.getAttribute("week-start") === "monday");
-      } else {
-        this._view = new HijriCalendar(this._today.hijri.year, this._today.hijri.month, this.getAttribute("week-start") === "monday");
-      }
-      this._populateYearDropdown();
+      this._today = dayHash(HijriDate.fromGregorian(new Date()), false);
+      this._view = new HijriCalendar(this._today.hijri.year, this._today.hijri.month, this.getAttribute("week-start") === "monday");
       this._render();
     };
-
     P.goTo = function (year, month) {
-      if (this._isGregorianBase) {
-        this._view = new GregorianCalendar(year, month, this.getAttribute("week-start") === "monday");
-      } else {
-        this._view = new HijriCalendar(Math.min(MAX_YEAR, Math.max(MIN_YEAR, year | 0)), Math.min(11, Math.max(0, month | 0)), this.getAttribute("week-start") === "monday");
-      }
-      this._els.yearSelect.value = this._view.getYear();
+      this._view = new HijriCalendar(Math.min(MAX_YEAR, Math.max(MIN_YEAR, year | 0)), Math.min(11, Math.max(0, month | 0)), this.getAttribute("week-start") === "monday");
       this._render();
     };
-
     P.clear = function () { this._select(null, { write: true, emit: true }); };
+    P.format = function (val, template) {
+      var day = parseValue(val, true);
+      return day ? formatDay(day, template || this.getAttribute("format") || "iso") : "";
+    };
 
+    /* --- Rendering Logic --- */
     P._render = function () {
       if (!this._connected) return;
       var arabic = this.getAttribute("numerals") !== "latin";
+      var hYear = this._view.getYear(), hMonth = this._view.getMonth();
 
-      this._els.yearSelect.value = this._view.getYear();
+      this._els.year.textContent = arabic ? toArabicNumerals(hYear) + "H" : hYear + "H";
+      this._els.month.textContent = HIJRI_MONTHS_LONG[hMonth];
 
-      if (this._isGregorianBase) {
-        var gYear = this._view.getYear(), gMonth = this._view.getMonth();
-        this._els.month.textContent = GREG_MONTHS[gMonth];
-        var firstHijri = HijriDate.fromGregorian(new Date(gYear, gMonth, 1));
-        var lastHijri = HijriDate.fromGregorian(new Date(gYear, gMonth + 1, 0));
-        this._els.range.textContent = HIJRI_MONTHS_SHORT[firstHijri.getMonth()] + " " + firstHijri.getDate() + " – " + HIJRI_MONTHS_SHORT[lastHijri.getMonth()] + " " + lastHijri.getDate() + ", " + lastHijri.getYear() + "H";
-      } else {
-        var hYear = this._view.getYear(), hMonth = this._view.getMonth();
-        this._els.month.textContent = HIJRI_MONTHS_LONG[hMonth];
-        var firstDay = new HijriDate(hYear, hMonth, 1).toGregorian();
-        var lastDay = new HijriDate(hYear, hMonth, HijriDate.daysInMonth(hYear, hMonth)).toGregorian();
-        this._els.range.textContent = GREG_MONTHS[firstDay.getMonth()].substr(0, 3) + " " + firstDay.getDate() + " – " + GREG_MONTHS[lastDay.getMonth()].substr(0, 3) + " " + lastDay.getDate() + ", " + lastDay.getFullYear();
-      }
+      var firstDay = new HijriDate(hYear, hMonth, 1).toGregorian();
+      var lastDay = new HijriDate(hYear, hMonth, HijriDate.daysInMonth(hYear, hMonth)).toGregorian();
+      this._els.range.textContent = GREG_MONTHS[firstDay.getMonth()].substr(0, 3) + " " + firstDay.getDate() + " – " + GREG_MONTHS[lastDay.getMonth()].substr(0, 3) + " " + lastDay.getDate() + ", " + lastDay.getFullYear();
 
+      // Headings
       var isMon = this.getAttribute("week-start") === "monday";
       var wHeadings = isMon ? WEEKDAYS_MON : WEEKDAYS_SUN;
       var thHtml = "";
       for (var i = 0; i < 7; i++) thHtml += "<th>" + wHeadings[i] + "</th>";
       this._els.thead.innerHTML = thHtml;
 
+      // Weeks & Days
       var weeks = this._view.weeks();
       var tbodyHtml = "";
       var maxBadges = parseInt(this.getAttribute("max-badges") || "2", 10);
@@ -642,7 +602,10 @@
         var week = weeks[w];
         for (var d = 0; d < week.length; d++) {
           var day = week[d];
-          if (!day) { tbodyHtml += '<td class="filler"></td>'; continue; }
+          if (!day) {
+            tbodyHtml += '<td class="filler"></td>';
+            continue;
+          }
           var isDisabled = (minDay && day.ajd < minDay.ajd) || (maxDay && day.ajd > maxDay.ajd);
           var isToday = sameDay(day, this._today);
           var isSelected = sameDay(day, this._selected);
@@ -653,10 +616,9 @@
           if (isSelected) cls.push("selected");
           if (isDisabled) cls.push("disabled");
 
-          var primaryNum = this._isGregorianBase ? day.gregorian.date : (arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date);
-          var secondaryText = this._isGregorianBase ? 
-            ((arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date) + " " + HIJRI_MONTHS_SHORT[day.hijri.month].substr(0, 3)) : 
-            (day.gregorian.date + " " + GREG_MONTHS[day.gregorian.month].substr(0, 3));
+          var hNum = arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date;
+          var gNum = day.gregorian.date;
+          if (day.hijri.date === 1 || gNum === 1) gNum += " " + GREG_MONTHS[day.gregorian.month].substr(0, 3);
 
           var badgesHtml = "";
           if (!this.hasAttribute("hide-miqaats") && this._miqaats.length > 0) {
@@ -669,14 +631,16 @@
                 var kind = classifyMiqaat(mItem);
                 badgesHtml += '<span class="miqaat-badge miqaat-' + kind + '" title="' + escapeHtml(mItem.title) + '">' + iconForKind(kind) + '<span>' + escapeHtml(mItem.title) + '</span></span>';
               }
-              if (mList.length > showCount) badgesHtml += '<span class="miqaat-more">+' + (mList.length - showCount) + ' more</span>';
+              if (mList.length > showCount) {
+                badgesHtml += '<span class="miqaat-more">+' + (mList.length - showCount) + ' more</span>';
+              }
               badgesHtml += '</div>';
             }
           }
 
           tbodyHtml += '<td class="' + cls.join(" ") + '" data-ajd="' + day.ajd + '">' +
-            '<div class="hijri-date">' + primaryNum + '</div>' +
-            '<div class="gregorian-date">' + secondaryText + '</div>' +
+            '<div class="hijri-date">' + hNum + '</div>' +
+            '<div class="gregorian-date">' + gNum + '</div>' +
             badgesHtml +
             '</td>';
         }
@@ -689,10 +653,14 @@
     P._renderMiqaatsList = function () {
       var container = this._els.miqaats;
       if (this.hasAttribute("hide-miqaats") || !this._selected || this._miqaats.length === 0) {
-        container.setAttribute("hidden", ""); return;
+        container.setAttribute("hidden", "");
+        return;
       }
       var list = miqaatsForDay(this._miqaats, this._selected);
-      if (list.length === 0) { container.setAttribute("hidden", ""); return; }
+      if (list.length === 0) {
+        container.setAttribute("hidden", "");
+        return;
+      }
       var html = '<h4>Miqaats for this day:</h4><ul>';
       for (var i = 0; i < list.length; i++) {
         html += '<li><strong>' + escapeHtml(list[i].title) + '</strong>' + (list[i].description ? ' — ' + escapeHtml(list[i].description) : '') + '</li>';
@@ -702,15 +670,13 @@
       container.removeAttribute("hidden");
     };
 
-    P._onYearChange = function (e) {
-      var newYear = parseInt(e.target.value, 10);
-      this.goTo(newYear, this._view.getMonth());
-    };
-
+    /* --- Interactions & Events --- */
     P._onRootClick = function (e) {
       var btn = e.target.closest("button");
       if (btn) {
         var action = btn.getAttribute("data-action");
+        if (action === "prev-year") this.goTo(this._view.getYear() - 1, this._view.getMonth());
+        if (action === "next-year") this.goTo(this._view.getYear() + 1, this._view.getMonth());
         if (action === "prev-month") { var prev = this._view.previousMonth(); this.goTo(prev.getYear(), prev.getMonth()); }
         if (action === "next-month") { var nxt = this._view.nextMonth(); this.goTo(nxt.getYear(), nxt.getMonth()); }
         if (action === "today") this.goToToday();
@@ -739,7 +705,7 @@
       e.preventDefault();
       var day = dayHash(HijriDate.fromAJD(nextAjd), false);
       this._select(day, { write: true, emit: true });
-      this.goTo(this._isGregorianBase ? day.gregorian.year : day.hijri.year, this._isGregorianBase ? day.gregorian.month : day.hijri.month);
+      this.goTo(day.hijri.year, day.hijri.month);
     };
 
     P._select = function (day, opts) {
@@ -761,6 +727,12 @@
         this._target.setAttribute("data-ajd", day.ajd);
         fire(this._target, "input", {});
         fire(this._target, "change", {});
+      }
+      if (this._targetHijri) {
+        var hFormat = this.getAttribute("hijri-format") || "hijri";
+        setNativeValue(this._targetHijri, formatDay(day, hFormat));
+        fire(this._targetHijri, "input", {});
+        fire(this._targetHijri, "change", {});
       }
     };
 
@@ -788,7 +760,9 @@
           self._render();
           fire(self, "hijri-miqaats-loaded", { count: self._miqaats.length });
         })
-        .catch(function (err) { fire(self, "hijri-error", { url: url, error: err }); });
+        .catch(function (err) {
+          fire(self, "hijri-error", { url: url, error: err });
+        });
     };
 
     P._bindTargets = function () {
@@ -799,6 +773,13 @@
         if (scope && scope.querySelector && scope !== document) this._target = scope.querySelector(sel);
         if (!this._target) this._target = document.querySelector(sel);
       }
+      var hSel = this.getAttribute("target-hijri");
+      if (hSel) {
+        var scope = this.getRootNode && this.getRootNode();
+        if (scope && scope.querySelector && scope !== document) this._targetHijri = scope.querySelector(hSel);
+        if (!this._targetHijri) this._targetHijri = document.querySelector(hSel);
+      }
+      this._attachTargetListeners();
     };
 
     P._unbindTargets = function () {
@@ -809,7 +790,21 @@
       }
     };
 
+    P._attachTargetListeners = function () {
+      if (this._target) {
+        this._target.addEventListener("focus", this._onTargetFocus);
+        this._target.addEventListener("click", this._onTargetFocus);
+        this._target.addEventListener("change", this._onTargetChange);
+      }
+    };
+
     P._onTargetFocus = function () { if (this.hasAttribute("popup")) this.open(); };
+    P._onTargetChange = function () {
+      if (this._target) {
+        var parsed = parseValue(this._target.value, true);
+        if (parsed) this._select(parsed, { write: false, emit: true });
+      }
+    };
 
     P._setupPopupListeners = function () {
       this._onDocPointerDown = this._onDocPointerDown.bind(this);
@@ -823,20 +818,57 @@
     P._onDocPointerDown = function (e) {
       if (!this.isOpen) return;
       var path = e.composedPath();
-      if (path.indexOf(this) === -1 && (!this._target || path.indexOf(this._target) === -1)) this.close();
+      if (path.indexOf(this) === -1 && (!this._target || path.indexOf(this._target) === -1)) {
+        this.close();
+      }
     };
 
-    HijriCalendarElement.format = function (val, tpl) { var d = parseValue(val, true); return d ? formatDay(d, tpl || "iso") : ""; };
-    HijriCalendarElement.parse = function (str) { var d = parseValue(str, true); return d ? { iso: formatDay(d, "iso"), hijri: formatDay(d, "hijri"), ajd: d.ajd } : null; };
-    HijriCalendarElement.toHijri = function (date) { var hd = HijriDate.fromGregorian(date); return new HijriDate(hd.getYear(), hd.getMonth(), hd.getDate()); };
-    HijriCalendarElement.toGregorian = function (y, m, d) { return new HijriDate(y, m, d).toGregorian(); };
+    /* --- Static Helpers --- */
+    HijriCalendarElement.format = function (val, tpl) {
+      var d = parseValue(val, true);
+      return d ? formatDay(d, tpl || "iso") : "";
+    };
+    HijriCalendarElement.parse = function (str) {
+      var d = parseValue(str, true);
+      return d ? { iso: formatDay(d, "iso"), hijri: formatDay(d, "hijri"), ajd: d.ajd } : null;
+    };
+    HijriCalendarElement.toHijri = function (date) {
+      var hd = HijriDate.fromGregorian(date);
+      return new HijriDate(hd.getYear(), hd.getMonth(), hd.getDate());
+    };
+    HijriCalendarElement.toGregorian = function (y, m, d) {
+      return new HijriDate(y, m, d).toGregorian();
+    };
     HijriCalendarElement.HijriDate = HijriDate;
-    HijriCalendarElement.GregorianCalendar = GregorianCalendar;
     HijriCalendarElement.HijriCalendar = HijriCalendar;
 
     return HijriCalendarElement;
   })(HTMLElement);
 
   window.customElements.define("hijri-calendar", HijriCalendarElement);
+
+  /* --- Auto-init from script tag data attributes --- */
+  var scripts = document.querySelectorAll("script[data-target]");
+  for (var i = 0; i < scripts.length; i++) {
+    var s = scripts[i], target = s.getAttribute("data-target");
+    if (target && !document.querySelector("hijri-calendar[target=\"" + target + "\"]")) {
+      var el = document.createElement("hijri-calendar");
+      el.setAttribute("target", target);
+      var attrs = s.attributes;
+      for (var j = 0; j < attrs.length; j++) {
+        var name = attrs[j].name;
+        if (name.indexOf("data-") === 0 && name !== "data-target") {
+          var attrName = name.substr(5);
+          el.setAttribute(attrName, attrs[j].value);
+        }
+      }
+      var tgtEl = document.querySelector(target);
+      if (tgtEl && tgtEl.parentNode) {
+        tgtEl.parentNode.insertBefore(el, tgtEl.nextSibling);
+      } else {
+        document.body.appendChild(el);
+      }
+    }
+  }
 
 })(window, document);
