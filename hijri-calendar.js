@@ -653,7 +653,6 @@
           if (isSelected) cls.push("selected");
           if (isDisabled) cls.push("disabled");
 
-          // Primary and secondary numbers based on whether base is Gregorian or Hijri
           var primaryNum = this._isGregorianBase ? day.gregorian.date : (arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date);
           var secondaryText = this._isGregorianBase ? 
             ((arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date) + " " + HIJRI_MONTHS_SHORT[day.hijri.month].substr(0, 3)) : 
