@@ -1,6 +1,6 @@
 /*!
  * <hijri-calendar> — standalone Gregorian/Hijri calendar & date picker
- * Vanilla JavaScript Web Component with Gregorian/Hijri base toggle, compact 5-year dropdown, min/max bounds, step validation, and Miqaats.
+ * Vanilla JavaScript Web Component with Gregorian/Hijri base toggle, scrollable 5-year rolling dropdown, min/max bounds, step validation, and Miqaats.
  */
 (function (window, document) {
   "use strict";
@@ -363,7 +363,7 @@
     "*,*::before,*::after{box-sizing:inherit}",
     ".frame{padding:.75em}",
     ".year-row{display:flex;align-items:center;justify-content:space-between;gap:.5em}",
-    "select.year-select{font:inherit;font-weight:600;font-size:1.1em;padding:.2em .5em;border:1px solid var(--hc-border);border-radius:var(--hc-radius);background:var(--hc-bg);color:var(--hc-fg);cursor:pointer;outline:none}",
+    "select.year-select{font:inherit;font-weight:600;font-size:1.1em;padding:.2em .5em;border:1px solid var(--hc-border);border-radius:var(--hc-radius);background:var(--hc-bg);color:var(--hc-fg);cursor:pointer;outline:none;max-height:110px;overflow-y:auto;}",
     "select.year-select:focus{border-color:var(--hc-accent)}",
     "button{font:inherit;color:var(--hc-accent);background:none;border:0;border-radius:var(--hc-radius);cursor:pointer;padding:.2em .45em;line-height:1}",
     "button:hover{background:var(--hc-hover-bg)}",
@@ -407,7 +407,7 @@
     "<style>" + STYLE + "</style>" +
     '<div class="frame" part="frame">' +
     '  <div class="year-row" part="header">' +
-    '    <select class="year-select" part="year" aria-label="Select year"></select>' +
+    '    <select class="year-select" part="year" aria-label="Select year" size="3"></select>' +
     '    <button type="button" class="today" part="button today" data-action="today">Today</button>' +
     '  </div>' +
     '  <div class="month-row" part="month-row">' +
@@ -539,7 +539,7 @@
       var currentYear = this._view.getYear();
       var arabic = this.getAttribute("numerals") !== "latin";
       
-      // Restrict year dropdown precisely to a 5-year span centered around current year (2 before, current, 2 after)
+      // Exactly a 5-year rolling span (2 years back, current year, 2 years forward)
       var startY = currentYear - 2;
       var endY = currentYear + 2;
 
