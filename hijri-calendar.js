@@ -1,6 +1,6 @@
 /*!
  * <hijri-calendar> — standalone Gregorian/Hijri calendar & date picker
- * Vanilla JavaScript Web Component with Gregorian/Hijri base toggle, scrollable 5-year rolling dropdown, min/max bounds, step validation, and Miqaats.
+ * Vanilla JavaScript Web Component with custom scrollable 5-year year dropdown, min/max bounds, step validation, and Miqaats.
  */
 (function (window, document) {
   "use strict";
@@ -363,12 +363,18 @@
     "*,*::before,*::after{box-sizing:inherit}",
     ".frame{padding:.75em}",
     ".year-row{display:flex;align-items:center;justify-content:space-between;gap:.5em}",
-    "select.year-select{font:inherit;font-weight:600;font-size:1.1em;padding:.2em .5em;border:1px solid var(--hc-border);border-radius:var(--hc-radius);background:var(--hc-bg);color:var(--hc-fg);cursor:pointer;outline:none;max-height:100px;overflow-y:auto;}",
-    "select.year-select:focus{border-color:var(--hc-accent)}",
+    // Custom Year Picker Styles
+    ".year-picker{position:relative;display:inline-block}",
+    ".year-btn{font:inherit;font-weight:600;font-size:1.1em;padding:.25em .6em;border:1px solid var(--hc-border);border-radius:var(--hc-radius);background:var(--hc-bg);color:var(--hc-fg);cursor:pointer;display:inline-flex;align-items:center;gap:6px;outline:none}",
+    ".year-btn:focus,.year-btn:hover{border-color:var(--hc-accent);background:var(--hc-hover-bg)}",
+    ".year-dropdown{position:absolute;top:100%;left:0;margin-top:4px;background:var(--hc-bg);border:1px solid var(--hc-border);border-radius:var(--hc-radius);box-shadow:var(--hc-shadow);max-height:140px;overflow-y:auto;z-index:20;width:100%;min-width:90px}",
+    ".year-dropdown[hidden]{display:none}",
+    ".year-item{padding:6px 10px;text-align:center;cursor:pointer;font-size:1em;font-weight:500}",
+    ".year-item:hover{background:var(--hc-hover-bg)}",
+    ".year-item.selected{background:var(--hc-accent);color:var(--hc-accent-fg)}",
     "button{font:inherit;color:var(--hc-accent);background:none;border:0;border-radius:var(--hc-radius);cursor:pointer;padding:.2em .45em;line-height:1}",
     "button:hover{background:var(--hc-hover-bg)}",
     "button:focus-visible{outline:2px solid var(--hc-accent);outline-offset:1px}",
-    "button.nav{font-size:1.4em;width:1.5em;height:1.5em;display:inline-flex;align-items:center;justify-content:center;padding:0}",
     "button.today{border:1px solid var(--hc-border);padding:.4em .8em;font-size:.85em;color:var(--hc-fg)}",
     ".month-row{display:flex;align-items:center;justify-content:space-between;margin:.4em 0 .6em}",
     ".month-title{flex:1;text-align:center}",
@@ -407,7 +413,10 @@
     "<style>" + STYLE + "</style>" +
     '<div class="frame" part="frame">' +
     '  <div class="year-row" part="header">' +
-    '    <select class="year-select" part="year" aria-label="Select year" size="3"></select>' +
+    '    <div class="year-picker">' +
+    '      <button type="button" class="year-btn" part="year-btn" aria-haspopup="true"><span></span> ▾</button>' +
+    '      <div class="year-dropdown" part="year-dropdown" hidden></div>' +
+    '    </div>' +
     '    <button type="button" class="today" part="button today" data-action="today">Today</button>' +
     '  </div>' +
     '  <div class="month-row" part="month-row">' +
@@ -439,7 +448,9 @@
       self._connected = false;
 
       self._els = {
-        yearSelect: root.querySelector(".year-select"),
+        yearBtn: root.querySelector(".year-btn span"),
+        yearBtnContainer: root.querySelector(".year-btn"),
+        yearDropdown: root.querySelector(".year-dropdown"),
         month: root.querySelector(".month"),
         range: root.querySelector(".greg-range"),
         table: root.querySelector("table"),
@@ -449,7 +460,6 @@
       };
 
       self._onRootClick = self._onRootClick.bind(self);
-      self._onYearChange = self._onYearChange.bind(self);
       self._onGridKeydown = self._onGridKeydown.bind(self);
       self._onTargetFocus = self._onTargetFocus.bind(self);
       self._onTargetClick = self._onTargetClick.bind(self);
@@ -476,7 +486,6 @@
       this._updateBaseMode();
       this._populateYearDropdown();
       this._root.addEventListener("click", this._onRootClick);
-      this._els.yearSelect.addEventListener("change", this._onYearChange);
       this._els.table.addEventListener("keydown", this._onGridKeydown);
       this._bindTargets();
 
@@ -497,7 +506,6 @@
     P.disconnectedCallback = function () {
       this._connected = false;
       this._root.removeEventListener("click", this._onRootClick);
-      this._els.yearSelect.removeEventListener("change", this._onYearChange);
       this._els.table.removeEventListener("keydown", this._onGridKeydown);
       this._unbindTargets();
       this._teardownPopupListeners();
@@ -535,19 +543,21 @@
     };
 
     P._populateYearDropdown = function () {
-      var html = "";
       var currentYear = this._view.getYear();
       var arabic = this.getAttribute("numerals") !== "latin";
       
-      // Exactly a 5-year rolling span (2 years back, current year, 2 years forward)
-      var startY = currentYear - 2;
-      var endY = currentYear + 2;
+      this._els.yearBtn.textContent = (this._isGregorianBase || !arabic) ? (currentYear + (this._isGregorianBase ? "" : "H")) : (toArabicNumerals(currentYear) + "H");
+
+      // Generate scrollable year list spanning a wide range (e.g., current year +/- 50 years, fully scrollable showing ~5 items at once)
+      var startY = currentYear - 50;
+      var endY = currentYear + 50;
+      var html = "";
 
       for (var y = startY; y <= endY; y++) {
         var label = (this._isGregorianBase || !arabic) ? (y + (this._isGregorianBase ? "" : "H")) : (toArabicNumerals(y) + "H");
-        html += '<option value="' + y + '"' + (y === currentYear ? ' selected' : '') + '>' + label + '</option>';
+        html += '<div class="year-item' + (y === currentYear ? ' selected' : '') + '" data-year="' + y + '">' + label + '</div>';
       }
-      this._els.yearSelect.innerHTML = html;
+      this._els.yearDropdown.innerHTML = html;
     };
 
     Object.defineProperties(P, {
@@ -587,6 +597,7 @@
     P.close = function () {
       if (!this.hasAttribute("open")) return;
       this.removeAttribute("open");
+      this._els.yearDropdown.setAttribute("hidden", "");
       this._teardownPopupListeners();
       fire(this, "hijri-close", {});
     };
@@ -608,6 +619,7 @@
       } else {
         this._view = new HijriCalendar(this._today.hijri.year, this._today.hijri.month, this.getAttribute("week-start") === "monday");
       }
+      this._els.yearDropdown.setAttribute("hidden", "");
       this._populateYearDropdown();
       this._render();
     };
@@ -626,8 +638,6 @@
 
     P._render = function () {
       if (!this._connected) return;
-      var arabic = this.getAttribute("numerals") !== "latin";
-
       this._populateYearDropdown();
 
       if (this._isGregorianBase) {
@@ -678,6 +688,7 @@
           if (isSelected) cls.push("selected");
           if (isDisabled) cls.push("disabled");
 
+          var arabic = this.getAttribute("numerals") !== "latin";
           var primaryNum = this._isGregorianBase ? day.gregorian.date : (arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date);
           var secondaryText = this._isGregorianBase ? 
             ((arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date) + " " + HIJRI_MONTHS_SHORT[day.hijri.month].substr(0, 3)) : 
@@ -727,12 +738,29 @@
       container.removeAttribute("hidden");
     };
 
-    P._onYearChange = function (e) {
-      var newYear = parseInt(e.target.value, 10);
-      this.goTo(newYear, this._view.getMonth());
-    };
-
     P._onRootClick = function (e) {
+      var yearBtn = e.target.closest(".year-btn");
+      if (yearBtn) {
+        var dd = this._els.yearDropdown;
+        if (dd.hasAttribute("hidden")) {
+          dd.removeAttribute("hidden");
+          // Scroll to selected/current year item inside dropdown
+          var selectedEl = dd.querySelector(".year-item.selected");
+          if (selectedEl) selectedEl.scrollIntoView({ block: "center" });
+        } else {
+          dd.setAttribute("hidden", "");
+        }
+        return;
+      }
+
+      var yearItem = e.target.closest(".year-item");
+      if (yearItem) {
+        var y = parseInt(yearItem.getAttribute("data-year"), 10);
+        this.goTo(y, this._view.getMonth());
+        this._els.yearDropdown.setAttribute("hidden", "");
+        return;
+      }
+
       var btn = e.target.closest("button");
       if (btn) {
         var action = btn.getAttribute("data-action");
@@ -741,6 +769,7 @@
         if (action === "today") this.goToToday();
         return;
       }
+
       var td = e.target.closest("td.day");
       if (td && !td.classList.contains("disabled")) {
         var ajd = parseFloat(td.getAttribute("data-ajd"));
@@ -865,6 +894,10 @@
       if (!this.isOpen) return;
       var path = e.composedPath();
       if (path.indexOf(this) === -1 && (!this._target || path.indexOf(this._target) === -1)) this.close();
+      // Also close year dropdown if clicked outside inside shadow dom
+      if (!e.composedPath().includes(this._els.yearBtnContainer)) {
+        this._els.yearDropdown.setAttribute("hidden", "");
+      }
     };
 
     HijriCalendarElement.format = function (val, tpl) { var d = parseValue(val, true); return d ? formatDay(d, tpl || "iso") : ""; };
