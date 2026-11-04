@@ -1,6 +1,6 @@
 /*!
  * <hijri-calendar> — standalone Gregorian/Hijri calendar & date picker
- * Vanilla JavaScript Web Component with Gregorian/Hijri base toggle, year dropdown, and Miqaat support.
+ * Vanilla JavaScript Web Component with Gregorian/Hijri base toggle, compact year dropdown, min/max bounds, step validation, and Miqaats.
  */
 (function (window, document) {
   "use strict";
@@ -288,6 +288,14 @@
     return !!a && !!b && a.hijri.year === b.hijri.year && a.hijri.month === b.hijri.month && a.hijri.date === b.hijri.date;
   }
 
+  function isValidStep(day, minDay, stepAttr) {
+    if (!stepAttr || stepAttr === "any") return true;
+    var step = parseFloat(stepAttr);
+    if (isNaN(step) || step <= 0) step = 1;
+    var baseAjd = minDay ? minDay.ajd : 0;
+    return Math.round(Math.abs(day.ajd - baseAjd)) % step === 0;
+  }
+
   function miqaatsForDay(miqaats, day) {
     var out = [], h = day.hijri;
     for (var i = 0; i < miqaats.length; i++) {
@@ -457,7 +465,7 @@
 
     Object.defineProperty(HijriCalendarElement, "observedAttributes", {
       get: function () {
-        return ["target", "target-hijri", "value", "week-start", "numerals", "min", "max", "miqaats-url", "popup", "format", "hijri-format", "max-badges", "hide-miqaats", "theme", "base"];
+        return ["target", "target-hijri", "value", "week-start", "numerals", "min", "max", "step", "miqaats-url", "popup", "format", "hijri-format", "max-badges", "hide-miqaats", "theme", "base"];
       }
     });
 
@@ -509,6 +517,7 @@
       } else if (name === "popup" && newVal === null) {
         this.close();
       } else {
+        this._populateYearDropdown();
         this._render();
       }
     };
@@ -530,8 +539,21 @@
       var currentYear = this._view.getYear();
       var arabic = this.getAttribute("numerals") !== "latin";
       
-      var startY = this._isGregorianBase ? 2000 : 1400;
-      var endY = this._isGregorianBase ? 2050 : 1500;
+      var minAttr = parseValue(this.getAttribute("min"), true);
+      var maxAttr = parseValue(this.getAttribute("max"), true);
+      
+      var startY, endY;
+      if (this._isGregorianBase) {
+        startY = minAttr ? minAttr.gregorian.year : (currentYear - 10);
+        endY = maxAttr ? maxAttr.gregorian.year : (currentYear + 10);
+      } else {
+        startY = minAttr ? minAttr.hijri.year : (currentYear - 10);
+        endY = maxAttr ? maxAttr.hijri.year : (currentYear + 10);
+      }
+
+      if (endY - startY < 20) {
+        endY = startY + 20;
+      }
 
       for (var y = startY; y <= endY; y++) {
         var label = (this._isGregorianBase || !arabic) ? (y + (this._isGregorianBase ? "" : "H")) : (toArabicNumerals(y) + "H");
@@ -645,6 +667,7 @@
       var maxBadges = parseInt(this.getAttribute("max-badges") || "2", 10);
       var minDay = parseValue(this.getAttribute("min"), true);
       var maxDay = parseValue(this.getAttribute("max"), true);
+      var stepAttr = this.getAttribute("step") || "1";
 
       for (var w = 0; w < weeks.length; w++) {
         tbodyHtml += "<tr>";
@@ -652,7 +675,12 @@
         for (var d = 0; d < week.length; d++) {
           var day = week[d];
           if (!day) { tbodyHtml += '<td class="filler"></td>'; continue; }
-          var isDisabled = (minDay && day.ajd < minDay.ajd) || (maxDay && day.ajd > maxDay.ajd);
+          
+          var isBeyondMin = minDay && day.ajd < minDay.ajd;
+          var isBeyondMax = maxDay && day.ajd > maxDay.ajd;
+          var violatesStep = !isValidStep(day, minDay, stepAttr);
+          var isDisabled = isBeyondMin || isBeyondMax || violatesStep;
+
           var isToday = sameDay(day, this._today);
           var isSelected = sameDay(day, this._selected);
 
