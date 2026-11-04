@@ -1,6 +1,6 @@
 /*!
  * <hijri-calendar> — standalone Gregorian/Hijri calendar & date picker
- * Vanilla JavaScript Web Component with Gregorian base view and Miqaat support.
+ * Vanilla JavaScript Web Component with Gregorian/Hijri base toggle, year dropdown, and Miqaat support.
  */
 (function (window, document) {
   "use strict";
@@ -362,9 +362,8 @@
     "*,*::before,*::after{box-sizing:inherit}",
     ".frame{padding:.75em}",
     ".year-row{display:flex;align-items:center;justify-content:space-between;gap:.5em}",
-    ".year-controls{display:flex;align-items:center;gap:.15em}",
-    "h2,h3,h4{margin:0;font-weight:600;line-height:1.2}",
-    "h2{font-size:1.25em;min-width:4.2em;text-align:center}",
+    "select.year-select{font:inherit;font-weight:600;font-size:1.1em;padding:.2em .5em;border:1px solid var(--hc-border);border-radius:var(--hc-radius);background:var(--hc-bg);color:var(--hc-fg);cursor:pointer;outline:none}",
+    "select.year-select:focus{border-color:var(--hc-accent)}",
     "button{font:inherit;color:var(--hc-accent);background:none;border:0;border-radius:var(--hc-radius);cursor:pointer;padding:.2em .45em;line-height:1}",
     "button:hover{background:var(--hc-hover-bg)}",
     "button:focus-visible{outline:2px solid var(--hc-accent);outline-offset:1px}",
@@ -373,7 +372,7 @@
     "button.today{border:1px solid var(--hc-border);padding:.4em .8em;font-size:.85em;color:var(--hc-fg)}",
     ".month-row{display:flex;align-items:center;justify-content:space-between;margin:.4em 0 .6em}",
     ".month-title{flex:1;text-align:center}",
-    "h3{font-size:1.1em}",
+    "h3{font-size:1.1em;margin:0}",
     ".greg-range{font-size:.75em;color:var(--hc-muted)}",
     "table{width:100%;border-collapse:collapse;table-layout:fixed}",
     "table:focus-visible{outline:2px solid var(--hc-accent);outline-offset:2px}",
@@ -409,11 +408,7 @@
     "<style>" + STYLE + "</style>" +
     '<div class="frame" part="frame">' +
     '  <div class="year-row" part="header">' +
-    '    <div class="year-controls">' +
-    '      <button type="button" class="nav" part="button nav" data-action="prev-year" aria-label="Previous year">−</button>' +
-    '      <h2 class="year" part="year" aria-live="polite"></h2>' +
-    '      <button type="button" class="nav" part="button nav" data-action="next-year" aria-label="Next year">+</button>' +
-    '    </div>' +
+    '    <select class="year-select" part="year" aria-label="Select year"></select>' +
     '    <button type="button" class="today" part="button today" data-action="today">Today</button>' +
     '  </div>' +
     '  <div class="month-row" part="month-row">' +
@@ -445,7 +440,7 @@
       self._connected = false;
 
       self._els = {
-        year: root.querySelector(".year"),
+        yearSelect: root.querySelector(".year-select"),
         month: root.querySelector(".month"),
         range: root.querySelector(".greg-range"),
         table: root.querySelector("table"),
@@ -455,6 +450,7 @@
       };
 
       self._onRootClick = self._onRootClick.bind(self);
+      self._onYearChange = self._onYearChange.bind(self);
       self._onGridKeydown = self._onGridKeydown.bind(self);
       self._onTargetFocus = self._onTargetFocus.bind(self);
       self._onTargetChange = self._onTargetChange.bind(self);
@@ -478,7 +474,9 @@
     P.connectedCallback = function () {
       this._connected = true;
       this._updateBaseMode();
+      this._populateYearDropdown();
       this._root.addEventListener("click", this._onRootClick);
+      this._els.yearSelect.addEventListener("change", this._onYearChange);
       this._els.table.addEventListener("keydown", this._onGridKeydown);
       this._bindTargets();
 
@@ -499,6 +497,7 @@
     P.disconnectedCallback = function () {
       this._connected = false;
       this._root.removeEventListener("click", this._onRootClick);
+      this._els.yearSelect.removeEventListener("change", this._onYearChange);
       this._els.table.removeEventListener("keydown", this._onGridKeydown);
       this._unbindTargets();
       this._teardownPopupListeners();
@@ -508,6 +507,7 @@
       if (!this._connected || oldVal === newVal) return;
       if (name === "base") {
         this._updateBaseMode();
+        this._populateYearDropdown();
       } else if (name === "target" || name === "target-hijri") {
         this._bindTargets();
       } else if (name === "value") {
@@ -531,6 +531,21 @@
         var hd = HijriDate.fromGregorian(now);
         this._view = new HijriCalendar(hd.getYear(), hd.getMonth(), this.getAttribute("week-start") === "monday");
       }
+    };
+
+    P._populateYearDropdown = function () {
+      var html = "";
+      var currentYear = this._view.getYear();
+      var arabic = this.getAttribute("numerals") !== "latin";
+      
+      var startY = this._isGregorianBase ? 2000 : 1400;
+      var endY = this._isGregorianBase ? 2050 : 1500;
+
+      for (var y = startY; y <= endY; y++) {
+        var label = (this._isGregorianBase || !arabic) ? (y + (this._isGregorianBase ? "" : "H")) : (toArabicNumerals(y) + "H");
+        html += '<option value="' + y + '"' + (y === currentYear ? ' selected' : '') + '>' + label + '</option>';
+      }
+      this._els.yearSelect.innerHTML = html;
     };
 
     Object.defineProperties(P, {
@@ -582,6 +597,7 @@
       } else {
         this._view = new HijriCalendar(this._today.hijri.year, this._today.hijri.month, this.getAttribute("week-start") === "monday");
       }
+      this._populateYearDropdown();
       this._render();
     };
 
@@ -591,6 +607,7 @@
       } else {
         this._view = new HijriCalendar(Math.min(MAX_YEAR, Math.max(MIN_YEAR, year | 0)), Math.min(11, Math.max(0, month | 0)), this.getAttribute("week-start") === "monday");
       }
+      this._els.yearSelect.value = this._view.getYear();
       this._render();
     };
 
@@ -604,16 +621,16 @@
       if (!this._connected) return;
       var arabic = this.getAttribute("numerals") !== "latin";
 
+      this._els.yearSelect.value = this._view.getYear();
+
       if (this._isGregorianBase) {
         var gYear = this._view.getYear(), gMonth = this._view.getMonth();
-        this._els.year.textContent = gYear;
         this._els.month.textContent = GREG_MONTHS[gMonth];
         var firstHijri = HijriDate.fromGregorian(new Date(gYear, gMonth, 1));
         var lastHijri = HijriDate.fromGregorian(new Date(gYear, gMonth + 1, 0));
         this._els.range.textContent = HIJRI_MONTHS_SHORT[firstHijri.getMonth()] + " " + firstHijri.getDate() + " – " + HIJRI_MONTHS_SHORT[lastHijri.getMonth()] + " " + lastHijri.getDate() + ", " + lastHijri.getYear() + "H";
       } else {
         var hYear = this._view.getYear(), hMonth = this._view.getMonth();
-        this._els.year.textContent = arabic ? toArabicNumerals(hYear) + "H" : hYear + "H";
         this._els.month.textContent = HIJRI_MONTHS_LONG[hMonth];
         var firstDay = new HijriDate(hYear, hMonth, 1).toGregorian();
         var lastDay = new HijriDate(hYear, hMonth, HijriDate.daysInMonth(hYear, hMonth)).toGregorian();
@@ -648,7 +665,6 @@
           if (isSelected) cls.push("selected");
           if (isDisabled) cls.push("disabled");
 
-          // In Gregorian base view, show Gregorian date as primary and Hijri as secondary (or vice versa)
           var primaryNum = this._isGregorianBase ? day.gregorian.date : (arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date);
           var secondaryText = this._isGregorianBase ? (arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date) + " " + HIJRI_MONTHS_SHORT[day.hijri.month].substr(0, 3) : day.gregorian.date + " " + GREG_MONTHS[day.gregorian.month].substr(0, 3);
 
@@ -700,12 +716,15 @@
       container.removeAttribute("hidden");
     };
 
+    P._onYearChange = function (e) {
+      var newYear = parseInt(e.target.value, 10);
+      this.goTo(newYear, this._view.getMonth());
+    };
+
     P._onRootClick = function (e) {
       var btn = e.target.closest("button");
       if (btn) {
         var action = btn.getAttribute("data-action");
-        if (action === "prev-year") this.goTo(this._view.getYear() - 1, this._view.getMonth());
-        if (action === "next-year") this.goTo(this._view.getYear() + 1, this._view.getMonth());
         if (action === "prev-month") { var prev = this._view.previousMonth(); this.goTo(prev.getYear(), prev.getMonth()); }
         if (action === "next-month") { var nxt = this._view.nextMonth(); this.goTo(nxt.getYear(), nxt.getMonth()); }
         if (action === "today") this.goToToday();
@@ -734,7 +753,7 @@
       e.preventDefault();
       var day = dayHash(HijriDate.fromAJD(nextAjd), false);
       this._select(day, { write: true, emit: true });
-      this.goTo(day.gregorian.year, day.gregorian.month);
+      this.goTo(this._isGregorianBase ? day.gregorian.year : day.hijri.year, this._isGregorianBase ? day.gregorian.month : day.hijri.month);
     };
 
     P._select = function (day, opts) {
@@ -854,6 +873,7 @@
     HijriCalendarElement.toGregorian = function (y, m, d) { return new HijriDate(y, m, d).toGregorian(); };
     HijriCalendarElement.HijriDate = HijriDate;
     HijriCalendarElement.GregorianCalendar = GregorianCalendar;
+    HijriCalendarElement.HijriCalendar = HijriCalendar;
 
     return HijriCalendarElement;
   })(HTMLElement);
