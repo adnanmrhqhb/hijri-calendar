@@ -1,6 +1,6 @@
 /*!
  * <hijri-calendar> — standalone Gregorian/Hijri calendar & date picker
- * Fixed: Hijri base view initialization and popup placement.
+ * Vanilla JavaScript Web Component with Gregorian/Hijri base toggle, year dropdown, and Miqaat support.
  */
 (function (window, document) {
   "use strict";
@@ -47,6 +47,7 @@
     "both":       "hD hMMMM hYYYYH (D MMMM YYYY)"
   };
 
+  /* --- HijriDate Class --- */
   function HijriDate(year, month, day) {
     this.year = year;
     this.month = month;
@@ -110,9 +111,10 @@
   HijriDate.fromGregorian = function (date) { return HijriDate.fromAJD(HijriDate.gregorianToAJD(date)); };
   HijriDate.prototype.toGregorian = function () { return HijriDate.ajdToGregorian(this.toAJD()); };
 
+  /* --- GregorianCalendar (Month view) --- */
   function GregorianCalendar(year, month, iso8601) {
     this.year = year;
-    this.month = month;
+    this.month = month; // 0-11
     this.iso8601 = !!iso8601;
   }
   GregorianCalendar.prototype.getYear = function () { return this.year; };
@@ -121,7 +123,8 @@
   GregorianCalendar.prototype.days = function () {
     var out = [], daysCount = new Date(this.year, this.month + 1, 0).getDate();
     for (var d = 1; d <= daysCount; d++) {
-      out.push(dayHash(HijriDate.fromGregorian(new Date(this.year, this.month, d)), false));
+      var dt = new Date(this.year, this.month, d);
+      out.push(dayHash(HijriDate.fromGregorian(dt), false));
     }
     return out;
   };
@@ -131,7 +134,8 @@
     if (this.iso8601) wDay = (wDay === 0) ? 6 : wDay - 1;
     var prevMonthLast = new Date(this.year, this.month, 0), daysInPrev = prevMonthLast.getDate();
     for (var i = 0; i < wDay; i++) {
-      out.push(dayHash(HijriDate.fromGregorian(new Date(this.year, this.month - 1, daysInPrev - wDay + i + 1)), true));
+      var dt = new Date(this.year, this.month - 1, daysInPrev - wDay + i + 1);
+      out.push(dayHash(HijriDate.fromGregorian(dt), true));
     }
     return out;
   };
@@ -140,7 +144,8 @@
     var out = [], lastDt = new Date(this.year, this.month + 1, 0), wDay = lastDt.getDay();
     var trail = this.iso8601 ? (wDay === 0 ? 0 : 6 - wDay) : (6 - wDay);
     for (var i = 0; i < trail; i++) {
-      out.push(dayHash(HijriDate.fromGregorian(new Date(this.year, this.month + 1, i + 1)), true));
+      var dt = new Date(this.year, this.month + 1, i + 1);
+      out.push(dayHash(HijriDate.fromGregorian(dt), true));
     }
     return out;
   };
@@ -163,6 +168,7 @@
     return new GregorianCalendar(y, m, this.iso8601);
   };
 
+  /* --- HijriCalendar (Month view) --- */
   function HijriCalendar(year, month, iso8601) {
     this.year = year;
     this.month = month;
@@ -203,6 +209,7 @@
     return new HijriCalendar(y, m, this.iso8601);
   };
 
+  /* --- Helpers --- */
   function dayHash(hijriDate, isFiller) {
     var g = hijriDate.toGregorian();
     return {
@@ -350,7 +357,7 @@
     "  display:block;box-sizing:border-box;font:var(--hc-font-size)/1.4 var(--hc-font);color:var(--hc-fg);background:var(--hc-bg);border:1px solid var(--hc-border);border-radius:var(--hc-radius);max-width:100%;user-select:none;",
     "}",
     ":host([hidden]){display:none}",
-    ":host([popup]){display:none;position:absolute;z-index:2147483000;width:24em;box-shadow:var(--hc-shadow);--hc-cell-height:3.6em;--hc-font-size:14px}",
+    ":host([popup]){display:none;position:fixed;z-index:2147483000;width:24em;box-shadow:var(--hc-shadow);--hc-cell-height:3.6em;--hc-font-size:14px}",
     ":host([popup][open]){display:block}",
     "*,*::before,*::after{box-sizing:inherit}",
     ".frame{padding:.75em}",
@@ -360,6 +367,7 @@
     "button{font:inherit;color:var(--hc-accent);background:none;border:0;border-radius:var(--hc-radius);cursor:pointer;padding:.2em .45em;line-height:1}",
     "button:hover{background:var(--hc-hover-bg)}",
     "button:focus-visible{outline:2px solid var(--hc-accent);outline-offset:1px}",
+    "button[disabled]{opacity:.3;cursor:default;background:none}",
     "button.nav{font-size:1.4em;width:1.5em;height:1.5em;display:inline-flex;align-items:center;justify-content:center;padding:0}",
     "button.today{border:1px solid var(--hc-border);padding:.4em .8em;font-size:.85em;color:var(--hc-fg)}",
     ".month-row{display:flex;align-items:center;justify-content:space-between;margin:.4em 0 .6em}",
@@ -367,6 +375,7 @@
     "h3{font-size:1.1em;margin:0}",
     ".greg-range{font-size:.75em;color:var(--hc-muted)}",
     "table{width:100%;border-collapse:collapse;table-layout:fixed}",
+    "table:focus-visible{outline:2px solid var(--hc-accent);outline-offset:2px}",
     "th{font-size:.72em;font-weight:600;color:var(--hc-muted);text-transform:uppercase;letter-spacing:.04em;padding:.35em 0;text-align:center}",
     "td{position:relative;height:var(--hc-cell-height);border:1px solid var(--hc-border);padding:2px;vertical-align:top;overflow:hidden}",
     "td.day{cursor:pointer}",
@@ -420,8 +429,8 @@
       self._root = root;
       self._today = dayHash(HijriDate.fromGregorian(new Date()), false);
       
-      self._isGregorianBase = true;
       var now = new Date();
+      self._isGregorianBase = true; // default to gregorian base view
       self._view = new GregorianCalendar(now.getFullYear(), now.getMonth(), false);
       
       self._selected = null;
@@ -568,7 +577,6 @@
     P.open = function () {
       if (!this.hasAttribute("popup") || this.hasAttribute("open")) return;
       this.setAttribute("open", "");
-      this._positionPopup();
       this._setupPopupListeners();
       fire(this, "hijri-open", {});
     };
@@ -580,15 +588,7 @@
       fire(this, "hijri-close", {});
     };
 
-    P._positionPopup = function () {
-      if (!this._target) return;
-      var rect = this._target.getBoundingClientRect();
-      this.style.top = (window.scrollY + rect.bottom + 6) + "px";
-      this.style.left = (window.scrollX + rect.left) + "px";
-    };
-
     P.toggle = function () { this.isOpen ? this.close() : this.open(); };
-    
     P.goToToday = function () {
       var now = new Date();
       this._today = dayHash(HijriDate.fromGregorian(now), false);
@@ -612,6 +612,10 @@
     };
 
     P.clear = function () { this._select(null, { write: true, emit: true }); };
+    P.format = function (val, template) {
+      var day = parseValue(val, true);
+      return day ? formatDay(day, template || this.getAttribute("format") || "iso") : "";
+    };
 
     P._render = function () {
       if (!this._connected) return;
@@ -662,9 +666,11 @@
           if (isDisabled) cls.push("disabled");
 
           var primaryNum = this._isGregorianBase ? day.gregorian.date : (arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date);
-          var secondaryText = this._isGregorianBase ? 
-            ((arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date) + " " + HIJRI_MONTHS_SHORT[day.hijri.month].substr(0, 3)) : 
-            (day.gregorian.date + " " + GREG_MONTHS[day.gregorian.month].substr(0, 3));
+          var secondaryText = this._isGregorianBase ? (arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date) + " " + HIJRI_MONTHS_SHORT[day.hijri.month].substr(0, 3) : day.gregorian.date + " " + GREG_MONTHS[day.gregorian.month].substr(0, 3);
+
+          if ((this._isGregorianBase && day.gregorian.date === 1) || (!this._isGregorianBase && day.hijri.date === 1)) {
+            secondaryText = this._isGregorianBase ? (arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date) + " " + HIJRI_MONTHS_SHORT[day.hijri.month].substr(0, 3) : day.gregorian.date + " " + GREG_MONTHS[day.gregorian.month].substr(0, 3);
+          }
 
           var badgesHtml = "";
           if (!this.hasAttribute("hide-miqaats") && this._miqaats.length > 0) {
@@ -770,6 +776,12 @@
         fire(this._target, "input", {});
         fire(this._target, "change", {});
       }
+      if (this._targetHijri) {
+        var hFormat = this.getAttribute("hijri-format") || "hijri";
+        setNativeValue(this._targetHijri, formatDay(day, hFormat));
+        fire(this._targetHijri, "input", {});
+        fire(this._targetHijri, "change", {});
+      }
     };
 
     P._detail = function (day) {
@@ -807,6 +819,13 @@
         if (scope && scope.querySelector && scope !== document) this._target = scope.querySelector(sel);
         if (!this._target) this._target = document.querySelector(sel);
       }
+      var hSel = this.getAttribute("target-hijri");
+      if (hSel) {
+        var scope = this.getRootNode && this.getRootNode();
+        if (scope && scope.querySelector && scope !== document) this._targetHijri = scope.querySelector(hSel);
+        if (!this._targetHijri) this._targetHijri = document.querySelector(hSel);
+      }
+      this._attachTargetListeners();
     };
 
     P._unbindTargets = function () {
@@ -817,7 +836,21 @@
       }
     };
 
+    P._attachTargetListeners = function () {
+      if (this._target) {
+        this._target.addEventListener("focus", this._onTargetFocus);
+        this._target.addEventListener("click", this._onTargetFocus);
+        this._target.addEventListener("change", this._onTargetChange);
+      }
+    };
+
     P._onTargetFocus = function () { if (this.hasAttribute("popup")) this.open(); };
+    P._onTargetChange = function () {
+      if (this._target) {
+        var parsed = parseValue(this._target.value, true);
+        if (parsed) this._select(parsed, { write: false, emit: true });
+      }
+    };
 
     P._setupPopupListeners = function () {
       this._onDocPointerDown = this._onDocPointerDown.bind(this);
