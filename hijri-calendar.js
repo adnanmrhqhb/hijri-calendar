@@ -1,6 +1,6 @@
 /*!
  * <hijri-calendar> — standalone Gregorian/Hijri calendar & date picker
- * Vanilla JavaScript Web Component with Gregorian/Hijri base toggle, compact year dropdown, min/max bounds, step validation, and Miqaats.
+ * Vanilla JavaScript Web Component with Gregorian/Hijri base toggle, compact 5-year dropdown, min/max bounds, step validation, and Miqaats.
  */
 (function (window, document) {
   "use strict";
@@ -539,21 +539,9 @@
       var currentYear = this._view.getYear();
       var arabic = this.getAttribute("numerals") !== "latin";
       
-      var minAttr = parseValue(this.getAttribute("min"), true);
-      var maxAttr = parseValue(this.getAttribute("max"), true);
-      
-      var startY, endY;
-      if (this._isGregorianBase) {
-        startY = minAttr ? minAttr.gregorian.year : (currentYear - 10);
-        endY = maxAttr ? maxAttr.gregorian.year : (currentYear + 10);
-      } else {
-        startY = minAttr ? minAttr.hijri.year : (currentYear - 10);
-        endY = maxAttr ? maxAttr.hijri.year : (currentYear + 10);
-      }
-
-      if (endY - startY < 20) {
-        endY = startY + 20;
-      }
+      // Restrict year dropdown precisely to a 5-year span centered around current year (2 before, current, 2 after)
+      var startY = currentYear - 2;
+      var endY = currentYear + 2;
 
       for (var y = startY; y <= endY; y++) {
         var label = (this._isGregorianBase || !arabic) ? (y + (this._isGregorianBase ? "" : "H")) : (toArabicNumerals(y) + "H");
@@ -630,7 +618,7 @@
       } else {
         this._view = new HijriCalendar(Math.min(MAX_YEAR, Math.max(MIN_YEAR, year | 0)), Math.min(11, Math.max(0, month | 0)), this.getAttribute("week-start") === "monday");
       }
-      this._els.yearSelect.value = this._view.getYear();
+      this._populateYearDropdown();
       this._render();
     };
 
@@ -640,7 +628,7 @@
       if (!this._connected) return;
       var arabic = this.getAttribute("numerals") !== "latin";
 
-      this._els.yearSelect.value = this._view.getYear();
+      this._populateYearDropdown();
 
       if (this._isGregorianBase) {
         var gYear = this._view.getYear(), gMonth = this._view.getMonth();
