@@ -8,6 +8,17 @@
   if (!window || !document || !window.customElements) return;
   if (window.customElements.get("hijri-calendar")) return;
 
+  /* Arabic month names are set in Al Kanz Al Marjaan, loaded from fonts/ next to this script.
+     @font-face is ignored inside a shadow root, so it is registered on the host document. */
+  var AR_FONT_FAMILY = "HC Kanz Al Marjaan";
+  (function registerArabicFont() {
+    var src = document.currentScript && document.currentScript.src, url = "fonts/kanz-al-marjaan.ttf";
+    if (src) url = new URL(url, src).href;
+    var style = document.createElement("style");
+    style.textContent = "@font-face{font-family:'" + AR_FONT_FAMILY + "';src:url('" + url + "') format('truetype');font-display:swap}";
+    (document.head || document.documentElement).appendChild(style);
+  })();
+
   var MIN_YEAR = 1000;
   var MAX_YEAR = 3000;
 
@@ -37,12 +48,12 @@
 
   var HIJRI_MONTHS_LONG_AR = [
     "المحرم الحرام", "صفر المظفر", "ربيع الأول", "ربيع الآخر",
-    "جمادى الأولى", "جمادى الآخرة", "رجب الأصب", "شعبان الكريم",
+    "جمادى الأولى", "جمادى الأخرى", "رجب الأصب", "شعبان الكريم",
     "رمضان المعظم", "شوال المكرم", "ذو القعدة الحرام", "ذو الحجة الحرام"
   ];
 
   var HIJRI_MONTHS_SHORT_AR = [
-    "المحرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الآخرة",
+    "المحرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الأخرى",
     "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة"
   ];
 
@@ -410,7 +421,13 @@
     "td.range-start,td.range-end,td.range-start:hover,td.range-end:hover{background:var(--hc-accent);color:var(--hc-accent-fg)}",
     "td.range-start .gregorian-date,td.range-end .gregorian-date{color:var(--hc-accent-fg)}",
     ".hijri-date{font-size:1.1em;font-weight:600;line-height:1.1;text-align:right;padding:2px}",
-    ".gregorian-date{font-size:.65em;line-height:1;color:var(--hc-muted);position:absolute;bottom:2px;left:2px}",
+    ".gregorian-date{font-size:.65em;line-height:1.2;color:var(--hc-muted);text-align:right;padding:0 2px}",
+    ".ar{font-family:'" + AR_FONT_FAMILY + "';letter-spacing:0}",
+    ".gregorian-date.ar{font-size:.85em;line-height:1.35}",
+    ".greg-range.ar{font-size:1.05em}",
+    "h3.ar{font-size:1.4em}",
+    "td.new-month .hijri-date,td.new-month .gregorian-date{font-weight:700}",
+    "td.new-month .gregorian-date{color:inherit}",
     "td.selected .gregorian-date{color:var(--hc-accent-fg)}",
     ".miqaat-badges{display:flex;flex-direction:column;gap:1px;margin-top:2px;overflow:hidden}",
     ".miqaat-badge{font-size:.62em;padding:1px 3px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-flex;align-items:center;gap:2px}",
@@ -721,14 +738,22 @@
         this._els.month.textContent = GREG_MONTHS[gMonth];
         var firstHijri = HijriDate.fromGregorian(new Date(gYear, gMonth, 1));
         var lastHijri = HijriDate.fromGregorian(new Date(gYear, gMonth + 1, 0));
-        this._els.range.textContent = HIJRI_MONTHS_SHORT[firstHijri.getMonth()] + " " + firstHijri.getDate() + " – " + HIJRI_MONTHS_SHORT[lastHijri.getMonth()] + " " + lastHijri.getDate() + ", " + lastHijri.getYear() + "H";
+        var num = function (n) { return arabic ? toArabicNumerals(n) : n; };
+        this._els.range.textContent = num(firstHijri.getDate()) + " " + HIJRI_MONTHS_LONG_AR[firstHijri.getMonth()] + " – " + num(lastHijri.getDate()) + " " + HIJRI_MONTHS_LONG_AR[lastHijri.getMonth()] + " " + num(lastHijri.getYear()) + "هـ";
       } else {
         var hYear = this._view.getYear(), hMonth = this._view.getMonth();
-        this._els.month.textContent = HIJRI_MONTHS_LONG[hMonth];
+        this._els.month.textContent = HIJRI_MONTHS_LONG_AR[hMonth];
         var firstDay = new HijriDate(hYear, hMonth, 1).toGregorian();
         var lastDay = new HijriDate(hYear, hMonth, HijriDate.daysInMonth(hYear, hMonth)).toGregorian();
         this._els.range.textContent = GREG_MONTHS[firstDay.getMonth()].substr(0, 3) + " " + firstDay.getDate() + " – " + GREG_MONTHS[lastDay.getMonth()].substr(0, 3) + " " + lastDay.getDate() + ", " + lastDay.getFullYear();
       }
+
+      var hijriTitle = this._isGregorianBase ? this._els.range : this._els.month;
+      var gregTitle = this._isGregorianBase ? this._els.month : this._els.range;
+      hijriTitle.classList.add("ar");
+      hijriTitle.setAttribute("dir", "rtl");
+      gregTitle.classList.remove("ar");
+      gregTitle.removeAttribute("dir");
 
       var isMon = this.getAttribute("week-start") === "monday";
       var wHeadings = isMon ? WEEKDAYS_MON : WEEKDAYS_SUN;
@@ -766,11 +791,11 @@
           if (isDisabled) cls.push("disabled");
 
           var primaryNum = this._isGregorianBase ? day.gregorian.date : (arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date);
-          var secondaryText = this._isGregorianBase ? (arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date) + " " + HIJRI_MONTHS_SHORT[day.hijri.month].substr(0, 3) : day.gregorian.date + " " + GREG_MONTHS[day.gregorian.month].substr(0, 3);
+          var secondaryText = this._isGregorianBase ? (arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date) + " " + HIJRI_MONTHS_LONG_AR[day.hijri.month] : day.gregorian.date + " " + GREG_MONTHS[day.gregorian.month].substr(0, 3);
+          var secondaryAttrs = this._isGregorianBase ? ' ar" dir="rtl" lang="ar' : '';
 
-          if ((this._isGregorianBase && day.gregorian.date === 1) || (!this._isGregorianBase && day.hijri.date === 1)) {
-            secondaryText = this._isGregorianBase ? (arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date) + " " + HIJRI_MONTHS_SHORT[day.hijri.month].substr(0, 3) : day.gregorian.date + " " + GREG_MONTHS[day.gregorian.month].substr(0, 3);
-          }
+          // A new month starts here: the Hijri month in Gregorian view, the Gregorian month in Hijri view.
+          if ((this._isGregorianBase ? day.hijri.date : day.gregorian.date) === 1) cls.push("new-month");
 
           var badgesHtml = "";
           if (!this.hasAttribute("hide-miqaats") && this._miqaats.length > 0) {
@@ -790,7 +815,7 @@
 
           tbodyHtml += '<td class="' + cls.join(" ") + '" data-ajd="' + day.ajd + '">' +
             '<div class="hijri-date">' + primaryNum + '</div>' +
-            '<div class="gregorian-date">' + secondaryText + '</div>' +
+            '<div class="gregorian-date' + secondaryAttrs + '">' + secondaryText + '</div>' +
             badgesHtml +
             '</td>';
         }

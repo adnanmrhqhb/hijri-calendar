@@ -23,7 +23,8 @@ file:// open also works except for loading `miqaats.json`).
 
 | File                | Purpose                                                           |
 | ------------------- | ----------------------------------------------------------------- |
-| `hijri-calendar.js` | The widget. The only file a host page needs.                      |
+| `hijri-calendar.js` | The widget.                                                       |
+| `fonts/kanz-al-marjaan.ttf` | Al Kanz Al Marjaan, used for the Arabic month names. Deploy it in `fonts/` next to the script. |
 | `miqaats.json`      | Optional miqaat data (copied from the original site). Load it with `miqaats-url`. |
 | `demo.html`         | Examples: popup, inline, theming, min/max, auto-init.             |
 | `serve.js`          | Tiny static server for the demo (`node serve.js [port]`).         |
