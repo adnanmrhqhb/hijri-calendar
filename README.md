@@ -43,7 +43,7 @@ file:// open also works except for loading `miqaats.json`).
 | `range`         | off        | Date-range mode: first click picks the start, second the end (swapped if earlier), a third restarts. `target` receives `start – end`; read `el.rangeValue` (`{start,end,days}`; the setter takes `{start,end}` as Dates or ISO strings, Hijri with an `H` suffix) or listen to `hijri-range-change`. |
 | `range-separator` | ` – `    | Text placed between the two dates written to `target` / `target-hijri`. |
 | `week-start`    | `sunday`   | `monday` starts rows on Monday (ISO 8601). |
-| `numerals`      | `arabic`   | `latin` shows the big Hijri day number as `12` instead of `١٢`. |
+| `numerals`      | `arabic`   | Hijri days and years use Arabic digits (`١٢`); `latin` shows `12`. Gregorian ones are always `12`. With `base="hijri"` the Hijri date, month and year are primary and Gregorian secondary; with `base="gregorian"` it is the reverse. |
 | `miqaats-url`   | –          | URL of a JSON file in the `miqaats.json` shape. Enables the in-cell miqaat badges and the list under the grid (see "Miqaat badges"). |
 | `max-badges`    | `2`        | How many miqaat pills to show per day before collapsing the rest into "+N more". |
 | `hide-miqaats`  | off        | Keep the badges but hide the list panel under the grid. |

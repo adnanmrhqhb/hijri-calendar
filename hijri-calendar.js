@@ -563,6 +563,7 @@
         this._rangeStart = this._rangeEnd = null;
         this._render();
       } else {
+        if (name === "numerals") this._populateYearDropdown();
         this._render();
       }
     };
@@ -588,10 +589,13 @@
       var endY = this._isGregorianBase ? 2050 : 1500;
 
       for (var y = startY; y <= endY; y++) {
-        var label = (this._isGregorianBase || !arabic) ? (y + (this._isGregorianBase ? "" : "H")) : (toArabicNumerals(y) + "H");
+        var label = this._isGregorianBase ? y : (arabic ? toArabicNumerals(y) + "هـ" : y + "H");
         html += '<li class="year-opt' + (y === currentYear ? ' current' : '') + '" role="option" data-year="' + y + '">' + label + '</li>';
       }
       this._els.yearList.innerHTML = html;
+      var arabicYears = !this._isGregorianBase && arabic;
+      this._els.yearBtn.classList.toggle("ar", arabicYears);
+      this._els.yearList.classList.toggle("ar", arabicYears);
       this._syncYear();
     };
 
@@ -790,7 +794,9 @@
           } else if (isSelected) cls.push("selected");
           if (isDisabled) cls.push("disabled");
 
-          var primaryNum = this._isGregorianBase ? day.gregorian.date : (arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date);
+          var primaryDate = this._isGregorianBase ? day.gregorian.date : day.hijri.date;
+          var arabicPrimary = !this._isGregorianBase && arabic;
+          var primaryNum = arabicPrimary ? toArabicNumerals(primaryDate) : primaryDate;
           var secondaryText = this._isGregorianBase ? (arabic ? toArabicNumerals(day.hijri.date) : day.hijri.date) + " " + HIJRI_MONTHS_LONG_AR[day.hijri.month] : day.gregorian.date + " " + GREG_MONTHS[day.gregorian.month].substr(0, 3);
           var secondaryAttrs = this._isGregorianBase ? ' ar" dir="rtl" lang="ar' : '';
 
@@ -814,7 +820,7 @@
           }
 
           tbodyHtml += '<td class="' + cls.join(" ") + '" data-ajd="' + day.ajd + '">' +
-            '<div class="hijri-date">' + primaryNum + '</div>' +
+            '<div class="hijri-date' + (arabicPrimary ? ' ar' : '') + '">' + primaryNum + '</div>' +
             '<div class="gregorian-date' + secondaryAttrs + '">' + secondaryText + '</div>' +
             badgesHtml +
             '</td>';
